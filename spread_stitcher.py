@@ -16,59 +16,6 @@ font_ttf = "LiberationSans-Regular.ttf"
 font_size = 40
 
 
-def extract(cbz: Path, out: Path) -> List[Path] | str:
-    """
-    Extract the given cbz to out and verify the pages of the cbz are the same size.
-    Will insert blank pages if needed to guarantee the cbz returns an even
-    number of pages so each page has a spread partner.
-    If successful, returns list of paths to all images.
-    If there's an error, returns an error string.
-    """
-    if not out.is_dir():
-        return f"[{cbz.name}] ERROR: {out} is not a directory!"
-
-    if not cbz.exists():
-        return f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping to next file"
-
-    if cbz.suffix != ".cbz":
-        return f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping to next file"
-
-    shutil.unpack_archive(cbz, out, "zip")
-
-    # In reverse, because we want right to left.
-    imgs = sorted(out.iterdir(), reverse=True)
-
-    # Ensure all images have same dimensions
-    with Image.open(imgs[0]) as first_img:
-        width = first_img.width
-        height = first_img.height
-        mode = first_img.mode
-
-    for img in imgs:
-        with Image.open(img) as curr_page:
-            # I've found that if a page is smaller than the dimensions, it's
-            # almost never an issue and is only off by a few pixels. However,
-            # if it's *larger*, then this cbz may already handle spreads!
-            if curr_page.width > width or curr_page.height > height:
-                return (f"[{cbz.name}] ERROR: "
-                        f"{img} {curr_page.width}x{curr_page.height} "
-                        f"doesn't match {width}x{height}! Skipping...")
-
-    if len(imgs) % 2 != 0:
-        # We have an odd amount of images. Add a blank page to the front of
-        # the imgs array to add a blank page at the end of the chapter so every
-        # page has a spread partner.
-        with Image.new(mode, (width, height)) as blank:
-            blank.paste("white", box=(0, 0, width, height))
-            location = out / ("blank" + imgs[0].suffix)
-            blank.save(location)
-            imgs.insert(0, location)
-
-    assert len(imgs) % 2 == 0
-
-    return imgs
-
-
 def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
     """Converts a cbz in-place to have merged pages."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -142,6 +89,59 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         if not quiet:
             print(f"[{cbz.name}] Done!")
         return True
+
+
+def extract(cbz: Path, out: Path) -> List[Path] | str:
+    """
+    Extract the given cbz to out and verify the pages of the cbz are the same size.
+    Will insert blank pages if needed to guarantee the cbz returns an even
+    number of pages so each page has a spread partner.
+    If successful, returns list of paths to all images.
+    If there's an error, returns an error string.
+    """
+    if not out.is_dir():
+        return f"[{cbz.name}] ERROR: {out} is not a directory!"
+
+    if not cbz.exists():
+        return f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping to next file"
+
+    if cbz.suffix != ".cbz":
+        return f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping to next file"
+
+    shutil.unpack_archive(cbz, out, "zip")
+
+    # In reverse, because we want right to left.
+    imgs = sorted(out.iterdir(), reverse=True)
+
+    # Ensure all images have same dimensions
+    with Image.open(imgs[0]) as first_img:
+        width = first_img.width
+        height = first_img.height
+        mode = first_img.mode
+
+    for img in imgs:
+        with Image.open(img) as curr_page:
+            # I've found that if a page is smaller than the dimensions, it's
+            # almost never an issue and is only off by a few pixels. However,
+            # if it's *larger*, then this cbz may already handle spreads!
+            if curr_page.width > width or curr_page.height > height:
+                return (f"[{cbz.name}] ERROR: "
+                        f"{img} {curr_page.width}x{curr_page.height} "
+                        f"doesn't match {width}x{height}! Skipping...")
+
+    if len(imgs) % 2 != 0:
+        # We have an odd amount of images. Add a blank page to the front of
+        # the imgs array to add a blank page at the end of the chapter so every
+        # page has a spread partner.
+        with Image.new(mode, (width, height)) as blank:
+            blank.paste("white", box=(0, 0, width, height))
+            location = out / ("blank" + imgs[0].suffix)
+            blank.save(location)
+            imgs.insert(0, location)
+
+    assert len(imgs) % 2 == 0
+
+    return imgs
 
 
 def main():
