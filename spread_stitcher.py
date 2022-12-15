@@ -158,20 +158,21 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         height = first_img.height
         mode = first_img.mode
 
-    first_page_bad = False
+    blank_page_path = out / f"blank{imgs[0].suffix}"
+
     with Image.open(imgs[-1]) as first_page:
-        colors = first_page.convert("RGBA").getcolors(1)
-        if colors and colors[0][1] == ImageColor.getcolor("white", "RGBA") and (first_page.width > width or first_page.height > height):
-            # We have a first page of all white with incorrect dimensions.
-            # Replace it with a blank page
-            first_page_bad = True
+        # Special case: check if first page is wrong dimensions *and* all white
+        # If so, we'll replace it with a white page of correct dimensions
+        first_page_bad = False
+        if first_page.width > width or first_page.height > height:
+            colors = first_page.convert("RGBA").getcolors(1)
+            first_page_bad = colors[0][1] == ImageColor.getcolor("white", "RGBA")
 
     if first_page_bad:
         with Image.new(mode, (width, height)) as blank:
             blank.paste("white", box=(0, 0, width, height))
-            location = out / f"blank_first{imgs[0].suffix}"
-            blank.save(location)
-            imgs[-1] = location
+            blank.save(blank_page_path)
+        imgs[-1] = blank_page_path
 
     for img in imgs:
         with Image.open(img) as curr_page:
@@ -187,11 +188,11 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         # We have an odd amount of images. Add a blank page to the front of
         # the imgs array to add a blank page at the end of the chapter so every
         # page has a spread partner.
-        with Image.new(mode, (width, height)) as blank:
-            blank.paste("white", box=(0, 0, width, height))
-            location = out / f"blank{imgs[0].suffix}"
-            blank.save(location)
-            imgs.insert(0, location)
+        if not blank_page_path.exists():
+            with Image.new(mode, (width, height)) as blank:
+                blank.paste("white", box=(0, 0, width, height))
+                blank.save(blank_page_path)
+        imgs.insert(0, blank_page_path)
 
     assert len(imgs) % 2 == 0
 
