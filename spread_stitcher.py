@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple
 from functools import partial
-from PIL import Image
+from PIL import Image, ImageColor
 from sys import stderr
 from multiprocessing import Pool
 
@@ -157,6 +157,21 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         width = first_img.width
         height = first_img.height
         mode = first_img.mode
+
+    first_page_bad = False
+    with Image.open(imgs[-1]) as first_page:
+        colors = first_page.convert("RGBA").getcolors(1)
+        if colors and colors[0][1] == ImageColor.getcolor("white", "RGBA") and (first_page.width > width or first_page.height > height):
+            # We have a first page of all white with incorrect dimensions.
+            # Replace it with a blank page
+            first_page_bad = True
+
+    if first_page_bad:
+        with Image.new(mode, (width, height)) as blank:
+            blank.paste("white", box=(0, 0, width, height))
+            location = out / f"blank_first{imgs[0].suffix}"
+            blank.save(location)
+            imgs[-1] = location
 
     for img in imgs:
         with Image.open(img) as curr_page:
