@@ -126,17 +126,9 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
     # and https://stackoverflow.com/questions/1970807/center-middle-align-text-with-pil
     # If we only have 2 pages, don't insert - we only have one page to show!
     if not skip_warning_page and len(imgs) > 2:
-        from PIL import ImageDraw, ImageFont
-        with Image.new(mode, (width*2, height)) as img:
-            img.paste("white", box=(0, 0, width*2, height))
-            draw = ImageDraw.Draw(img)
-            large_font = ImageFont.truetype(font_ttf, size=font_size)
-            (_, _, text_width, text_height) = draw.textbbox(
-                (0, 0), go_to_back_text, font=large_font)
-            draw.text(((width * 2 - text_width)/2, (height - text_height)/2),
-                      go_to_back_text, font=large_font, fill="black")
-            img.save(out / f"{pagenum:03d}.png")
-            pagenum += 1
+        write_warning_page(
+            out / f"{pagenum:03d}{imgs[0].suffix}", mode, width * 2, height)
+        pagenum += 1
 
     # The list is already in reverse. Pop off 2 images, stick first one
     # on left, second on right, give it the right name, done
@@ -151,6 +143,20 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
             pagenum += 1
 
     assert len(imgs) == 0
+
+
+def write_warning_page(out: Path, mode: str, width: int, height: int):
+    """Writes a warning page to out."""
+    from PIL import ImageDraw, ImageFont
+    with Image.new(mode, (width, height)) as img:
+        img.paste("white", box=(0, 0, width, height))
+        draw = ImageDraw.Draw(img)
+        large_font = ImageFont.truetype(font_ttf, size=font_size)
+        (_, _, text_width, text_height) = draw.textbbox(
+            (0, 0), go_to_back_text, font=large_font)
+        draw.text(((width - text_width)/2, (height - text_height)/2),
+                  go_to_back_text, font=large_font, fill="black")
+        img.save(out)
 
 
 def create_cbz(img_dir: Path, out: Path):
