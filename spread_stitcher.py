@@ -12,7 +12,7 @@ from sys import stderr
 # be placed as the front page of the PDF.
 go_to_back_text = "This manga is read Right to Left! Go to the last page :)"
 # Font used to print the message
-font_ttf = "LiberationSans-Regular.ttf"
+font_ttf = "arial.ttf"
 font_size = 40
 
 
