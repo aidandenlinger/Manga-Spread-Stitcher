@@ -41,14 +41,12 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         stitch(imgs, OUTDIR, skip_warning_page)
 
         # Third: rewrite cbz and overwrite if needed
-        shutil.make_archive(str(cbz), "zip", OUTDIR)
 
         # Move old cbz if needed, otherwise will be overwritten
         if not del_old_cbz:
             shutil.move(cbz, cbz.with_stem(cbz.stem + "_original"))
-        # make_archive adds a .zip to the end of the name, remove the .zip
-        # Overwrites existing .cbz if del_old_cbz is true
-        shutil.move(cbz.with_name(cbz.name + ".zip"), cbz)
+
+        create_cbz(OUTDIR, cbz)
 
         if not quiet:
             print(f"[{cbz.name}] Done!")
@@ -153,6 +151,17 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
             pagenum += 1
 
     assert len(imgs) == 0
+
+
+def create_cbz(img_dir: Path, out: Path):
+    """Given a directory of images, write a new cbz to out."""
+    assert img_dir.is_dir()
+
+    shutil.make_archive(str(out), "zip", img_dir)
+
+    # make_archive adds a .zip to the end of the name, remove the .zip
+    # Overwrites existing .cbz if del_old_cbz is true
+    shutil.move(out.with_name(out.name + ".zip"), out)
 
 
 def main():
