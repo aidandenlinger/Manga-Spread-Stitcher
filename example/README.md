@@ -6,7 +6,7 @@
 `merged.cbz` is an example output. You can't view the `cbz`s on Github's web
 interface, so I also converted them to PDFs so you can view them on Github.
 
-`unmerged-volumeof2` (cbz and pdf) is the output of creating a volume from
+`merged-volumeof2` (cbz and pdf) is the output of creating a volume from
 2 copies of `unmerged.cbz`. It concatinates the stitched chapters
 together and only generates one warning page at the beginning.
 
