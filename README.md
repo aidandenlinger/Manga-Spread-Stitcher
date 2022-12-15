@@ -48,14 +48,14 @@ python3 spread_stitcher.py --help
 ```
 to see all options.
 
-By default, the original cbzs are renamed by adding an `_original` to their
-name.  This is used so you can manually check the merge job and ensure there are
-no issues. You can use `-d` to instead delete the original cbzs once stitching
-is successful.
+By default when not creating a volume, the original cbzs are renamed by adding
+an `_original` to their name. This is used so you can manually check the merge
+job and ensure there are no issues. You can use `-d` to instead delete the
+original cbzs once stitching is successful.
 
 This script uses parallelization - many .cbzs will be merged at once. Each
 file will output to the console when it has started and when it has finished.
-You can use `-q` to silence these outputs.
+You can use `-q` to silence these outputs. Errors will still be printed.
 
 A page will be inserted at the beginning of the merged pdf saying to go to the
 back of the pdf to start the chapter. You can use `-w` to not add this page, but
@@ -79,6 +79,9 @@ python3 spread_stitcher.py "~/Documents/Manga/*.cbz"
 
 # Stitch all chapters in the ~/Documents/Manga folder, don't print any updates, and delete the original cbzs
 python3 spread_stitcher.py -qd "~/Documents/Manga/*.cbz"
+
+# Stitch several cbzs into the same cbz
+python3 spread_stitcher.py -v ch1.cbz ch2.cbz ch3.cbz
 ```
 
 ## Contributing
