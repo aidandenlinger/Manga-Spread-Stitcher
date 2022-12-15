@@ -44,7 +44,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
 
         # Move old cbz if needed, otherwise will be overwritten
         if not del_old_cbz:
-            shutil.move(cbz, cbz.with_stem(cbz.stem + "_original"))
+            shutil.move(cbz, cbz.with_stem(f"{cbz.stem}_original"))
 
         create_cbz(OUTDIR, cbz)
 
@@ -97,7 +97,7 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         # page has a spread partner.
         with Image.new(mode, (width, height)) as blank:
             blank.paste("white", box=(0, 0, width, height))
-            location = out / ("blank" + imgs[0].suffix)
+            location = out / f"blank{imgs[0].suffix}"
             blank.save(location)
             imgs.insert(0, location)
 
@@ -161,7 +161,7 @@ def create_cbz(img_dir: Path, out: Path):
 
     # make_archive adds a .zip to the end of the name, remove the .zip
     # Overwrites existing .cbz if del_old_cbz is true
-    shutil.move(out.with_name(out.name + ".zip"), out)
+    shutil.move(out.with_name(f"{out.name}.zip"), out)
 
 
 def main():
