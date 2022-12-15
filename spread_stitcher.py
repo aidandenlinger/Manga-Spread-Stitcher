@@ -23,60 +23,24 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
             print(f"[{cbz.name}] Starting...")
 
         WORKDIR = Path(tmpdir)
-        ARCHIVEDIR = WORKDIR / "archive"
-        OUTDIR = WORKDIR / "out"
 
+        # First, archive and verify cbz file in ARCHIVEDIR
+        ARCHIVEDIR = WORKDIR / "archive"
         ARCHIVEDIR.mkdir()
         extract_out = extract(cbz, ARCHIVEDIR)
+
         if isinstance(extract_out, str):
             print(extract_out, file=stderr)
             return False
 
         imgs = extract_out
 
-        # get width, height, mode
-        with Image.open(imgs[0]) as first_img:
-            width = first_img.width
-            height = first_img.height
-            mode = first_img.mode
-
-        # Second: stitch pages together
+        # Second: stitch pages together in OUTDIR
+        OUTDIR = WORKDIR / "out"
         OUTDIR.mkdir()
-        count = 1
+        stitch(imgs, OUTDIR, skip_warning_page)
 
-        # Add page to remind me to go to the last page, and avoid spoilers by
-        # not immediately showing the last page of the chapter.
-        # Help from https://stackoverflow.com/questions/16373425/add-text-on-image-using-pil
-        # and https://stackoverflow.com/questions/1970807/center-middle-align-text-with-pil
-        # If we only have 2 pages, don't insert - we only have one page to show!
-        if not skip_warning_page and len(imgs) > 2:
-            from PIL import ImageDraw, ImageFont
-            with Image.new(mode, (width*2, height)) as img:
-                img.paste("white", box=(0, 0, width*2, height))
-                draw = ImageDraw.Draw(img)
-                large_font = ImageFont.truetype(font_ttf, size=font_size)
-                (_, _, text_width, text_height) = draw.textbbox(
-                    (0, 0), go_to_back_text, font=large_font)
-                draw.text(((width * 2 - text_width)/2, (height - text_height)/2),
-                          go_to_back_text, font=large_font, fill="black")
-                img.save(OUTDIR / f"{count:03d}.png")
-                count += 1
-
-        # The list is already in reverse. Pop off 2 images, stick first one
-        # on left, second on right, give it the right name, done
-        # Made with help from https://stackoverflow.com/questions/10657383/stitching-photos-together
-        while len(imgs) >= 2:
-            with (Image.open(imgs.pop(0)) as img1,
-                  Image.open(imgs.pop(0)) as img2,
-                  Image.new(img1.mode, (width*2, height)) as out):
-                out.paste(im=img1, box=(0, 0))
-                out.paste(im=img2, box=(width, 0))
-                out.save(OUTDIR / f"{count:03d}.png")
-                count += 1
-
-        assert len(imgs) == 0
-
-        # Third: rewrite cbz
+        # Third: rewrite cbz and overwrite if needed
         shutil.make_archive(str(cbz), "zip", OUTDIR)
 
         # Move old cbz if needed, otherwise will be overwritten
@@ -142,6 +106,53 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
     assert len(imgs) % 2 == 0
 
     return imgs
+
+
+def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
+    """Stitches the images together in pairs and writes those stitches
+    to out. Will write a page warning readers to go to the back of the PDF
+    unless skip_warning_page is false."""
+    assert len(imgs) % 2 == 0
+
+    # get width, height, mode
+    with Image.open(imgs[0]) as first_img:
+        width = first_img.width
+        height = first_img.height
+        mode = first_img.mode
+
+    pagenum = 1
+
+    # Add page to remind me to go to the last page, and avoid spoilers by
+    # not immediately showing the last page of the chapter.
+    # Help from https://stackoverflow.com/questions/16373425/add-text-on-image-using-pil
+    # and https://stackoverflow.com/questions/1970807/center-middle-align-text-with-pil
+    # If we only have 2 pages, don't insert - we only have one page to show!
+    if not skip_warning_page and len(imgs) > 2:
+        from PIL import ImageDraw, ImageFont
+        with Image.new(mode, (width*2, height)) as img:
+            img.paste("white", box=(0, 0, width*2, height))
+            draw = ImageDraw.Draw(img)
+            large_font = ImageFont.truetype(font_ttf, size=font_size)
+            (_, _, text_width, text_height) = draw.textbbox(
+                (0, 0), go_to_back_text, font=large_font)
+            draw.text(((width * 2 - text_width)/2, (height - text_height)/2),
+                      go_to_back_text, font=large_font, fill="black")
+            img.save(out / f"{pagenum:03d}.png")
+            pagenum += 1
+
+    # The list is already in reverse. Pop off 2 images, stick first one
+    # on left, second on right, give it the right name, done
+    # Made with help from https://stackoverflow.com/questions/10657383/stitching-photos-together
+    while len(imgs) >= 2:
+        with (Image.open(imgs.pop(0)) as img1,
+              Image.open(imgs.pop(0)) as img2,
+              Image.new(img1.mode, (width*2, height)) as outimg):
+            outimg.paste(im=img1, box=(0, 0))
+            outimg.paste(im=img2, box=(width, 0))
+            outimg.save(out / f"{pagenum:03d}.png")
+            pagenum += 1
+
+    assert len(imgs) == 0
 
 
 def main():
