@@ -60,8 +60,10 @@ You can use `-q` to silence these outputs.
 A page will be inserted at the beginning of the merged pdf saying to go to the
 back of the pdf to start the chapter. You can use `-w` to not add this page, but
 be warned that when you open the pdf, the last page of the manga will
-be immediately displayed. You can customize the message and font by editing the
-script.
+be immediately displayed. You can customize the message and font by editing
+`go_to_back_text` and `font_size` at the beginning of the script. You can change
+the font by changing `font_ttf` to the name of the ttf file holding the font you
+want to use that is in your font library.
 
 There's a basic example of an unstitched cbz and a stitched cbz in the
 [example](example) folder.
