@@ -160,6 +160,11 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
 
     blank_page_path = out / f"blank{imgs[0].suffix}"
 
+    def create_blank_page():
+        with Image.new(mode, (width, height)) as blank:
+            blank.paste("white", box=(0, 0, width, height))
+            blank.save(blank_page_path)
+
     with Image.open(imgs[-1]) as first_page:
         # Special case: check if first page is wrong dimensions *and* all white
         # If so, we'll replace it with a white page of correct dimensions
@@ -169,9 +174,7 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
             first_page_bad = colors and colors[0][1] == ImageColor.getcolor("white", "RGBA")
 
     if first_page_bad:
-        with Image.new(mode, (width, height)) as blank:
-            blank.paste("white", box=(0, 0, width, height))
-            blank.save(blank_page_path)
+        create_blank_page()
         imgs[-1] = blank_page_path
 
     for img in imgs:
@@ -189,9 +192,7 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         # the imgs array to add a blank page at the end of the chapter so every
         # page has a spread partner.
         if not blank_page_path.exists():
-            with Image.new(mode, (width, height)) as blank:
-                blank.paste("white", box=(0, 0, width, height))
-                blank.save(blank_page_path)
+            create_blank_page()
         imgs.insert(0, blank_page_path)
 
     assert len(imgs) % 2 == 0
