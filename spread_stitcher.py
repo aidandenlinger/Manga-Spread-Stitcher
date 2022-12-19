@@ -23,8 +23,13 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
     in the same folder as the first cbz in the list."""
     assert len(cbzs) > 1
 
+    final_path = cbzs[0].parent / f"{cbzs[0].stem}-{cbzs[-1].name}"
+
+    if final_path.exists():
+        print(f"{[final_path.name]} ERROR: file name already exists, stopping. Delete the file and retry to proceed. (Was this volume already converted?)")
+        return False
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        final_path = cbzs[0].parent / f"{cbzs[0].stem}-{cbzs[-1].name}"
         if not quiet:
             print(f"[{final_path.name}] Starting volume...")
 
@@ -95,6 +100,19 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
 
 def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
     """Converts a cbz in-place to have merged pages."""
+    # Check that we don't have a name conflict for original file or if this is an original chapter
+    if not del_old_cbz:
+        ORIGINALCBZPATH = cbz.with_stem(f"{cbz.stem}_original")
+        if ORIGINALCBZPATH.exists():
+            print(
+                f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, skipping file. (Was this chapter already converted?)", file=stderr)
+            return False
+
+        if cbz.stem.endswith("_original"):
+            print(
+                f"[{cbz.name}] ERROR: cbz name ends with _original. Please rename the file. (Was this chapter already converted?)", file=stderr)
+            return False
+
     with tempfile.TemporaryDirectory() as tmpdir:
         if not quiet:
             print(f"[{cbz.name}] Starting...")
@@ -121,7 +139,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
 
         # Move old cbz if needed, otherwise will be overwritten
         if not del_old_cbz:
-            shutil.move(cbz, cbz.with_stem(f"{cbz.stem}_original"))
+            shutil.move(cbz, ORIGINALCBZPATH)
 
         create_cbz(OUTDIR, cbz)
 
