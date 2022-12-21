@@ -188,7 +188,7 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         first_page_bad = False
         if first_page.width > width or first_page.height > height:
             colors = first_page.convert("RGBA").getcolors(1)
-            first_page_bad = colors and colors[0][1] == ImageColor.getcolor("white", "RGBA")
+            first_page_bad = colors is not None and colors[0][1] == ImageColor.getcolor("white", "RGBA")
 
     if first_page_bad:
         create_blank_page()
