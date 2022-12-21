@@ -48,10 +48,15 @@ python3 spread_stitcher.py --help
 ```
 to see all options.
 
-By default when not creating a volume, the original cbzs are renamed by adding
-an `_original` to their name. This is used so you can manually check the merge
-job and ensure there are no issues. You can use `-d` to instead delete the
-original cbzs once stitching is successful.
+When not creating a volume, the original cbzs are renamed by adding an
+`_original` to their name, and the stitched cbz will have the original file
+name. This is used so you can manually check the merge job and ensure there are
+no issues. You can use `-d` to instead delete the original cbzs once stitching
+is successful.
+
+When creating a volume with `-v`, a new cbz will be made with the name
+`firstfilename-lastfilename.cbz`. `-d` will still work to delete the original
+cbz files.
 
 This script uses parallelization - many .cbzs will be merged at once. Each
 file will output to the console when it has started and when it has finished.
@@ -71,16 +76,22 @@ There's a basic example of an unstitched cbz and a stitched cbz in the
 Some basic examples:
 
 ```sh
+# See help
+python3 spread_stitcher.py --help
+
 # Stitch Chapter 1 in the ~/Documents/Manga folder
+# The stitched file will be named "ch1.cbz" and the
+# original file will be renamed to "ch1_original.cbz"
 python3 spread_stitcher.py "~/Documents/Manga/ch1.cbz"
 
-# Stitch all chapters in the ~/Documents/Manga folder
+# Stitch all chapters in the ~/Documents/Manga folder using shell globs
 python3 spread_stitcher.py "~/Documents/Manga/*.cbz"
 
-# Stitch all chapters in the ~/Documents/Manga folder, don't print any updates, and delete the original cbzs
+# Stitch all chapters in the ~/Documents/Manga folder, don't print any updates
+# (-q), and delete the original, nonstitched cbzs (-d)
 python3 spread_stitcher.py -qd "~/Documents/Manga/*.cbz"
 
-# Stitch several cbzs into the same cbz
+# Stitch ch1 through ch3 into a new cbz named ch1-ch3.cbz (-v)
 python3 spread_stitcher.py -v ch1.cbz ch2.cbz ch3.cbz
 ```
 
