@@ -249,6 +249,9 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
         with (Image.open(imgs.pop(0)) as img1,
               Image.open(imgs.pop(0)) as img2,
               Image.new(img1.mode, (width*2, height)) as outimg):
+            # Fill page with white, to account for smaller dimension pages
+            # Assumes the background color *should* be white
+            outimg.paste("white", box=(0, 0, width*2, height))
             outimg.paste(im=img1, box=(0, 0))
             outimg.paste(im=img2, box=(width, 0))
             outimg.save(out / f"{pagenum:03d}.png")
