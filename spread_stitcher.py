@@ -179,8 +179,7 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
     blank_page_path = out / f"blank{imgs[0].suffix}"
 
     def create_blank_page():
-        with Image.new(mode, (width, height)) as blank:
-            blank.paste("white", box=(0, 0, width, height))
+        with Image.new(mode, (width, height), "white") as blank:
             blank.save(blank_page_path)
 
     with Image.open(imgs[-1]) as first_page:
@@ -248,10 +247,9 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
     while len(imgs) >= 2:
         with (Image.open(imgs.pop(0)) as img1,
               Image.open(imgs.pop(0)) as img2,
-              Image.new(img1.mode, (width*2, height)) as outimg):
+              Image.new(img1.mode, (width*2, height), "white") as outimg):
             # Fill page with white, to account for smaller dimension pages
             # Assumes the background color *should* be white
-            outimg.paste("white", box=(0, 0, width*2, height))
             outimg.paste(im=img1, box=(0, 0))
             outimg.paste(im=img2, box=(width, 0))
             outimg.save(out / f"{pagenum:03d}.png")
@@ -263,8 +261,7 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
 def write_warning_page(out: Path, mode: str, width: int, height: int):
     """Writes a warning page to out."""
     from PIL import ImageDraw, ImageFont
-    with Image.new(mode, (width, height)) as img:
-        img.paste("white", box=(0, 0, width, height))
+    with Image.new(mode, (width, height), "white") as img:
         draw = ImageDraw.Draw(img)
         large_font = ImageFont.truetype(font_ttf, size=font_size)
         (_, _, text_width, text_height) = draw.textbbox(
