@@ -23,16 +23,20 @@ class WrongImageSize(Exception):
     pass
 
 
-def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
+def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
     """Converts a list of cbzs into one single cbz with merged spreads, placed
-    in the same folder as the first cbz in the list."""
+    in the same folder as the first cbz in the list.
+
+    :raises: FileExistsError if volume file name already exists
+    :raises: ChildProcessError if a child extract process throws an exception"""
     assert len(cbzs) > 1
 
     final_path = cbzs[0].parent / f"{cbzs[0].stem}-{cbzs[-1].name}"
 
     if final_path.exists():
-        print(f"{[final_path.name]} ERROR: file name already exists, stopping. Delete the file and retry to proceed. (Was this volume already converted?)")
-        return False
+        raise FileExistsError(
+            f"{[final_path.name]} ERROR: file name already exists, stopping. "
+            "Delete the file and retry to proceed. (Was this volume already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         if not quiet:
@@ -50,9 +54,8 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
                             enumerate(reversed(cbzs), start=1))
 
         if not all(results):
-            print(
-                f"[{final_path.name}] Terminating volume since earlier chapters failed.", file=stderr)
-            return False
+            raise ChildProcessError(
+                f"[{final_path.name}] Terminating volume since earlier chapters failed.")
 
         # Insert warning page at beginning if needed
         if not skip_warning_page:
@@ -71,7 +74,6 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
         if not quiet:
             print(
                 f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
-        return True
 
 
 def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir: Path, quiet: bool) -> bool:
@@ -102,8 +104,6 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     if not quiet:
         print(f"\t[{cbz.name}] Done!")
     return True
-
-
 
 
 def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
@@ -296,6 +296,7 @@ def create_cbz(img_dir: Path, out: Path):
     # Overwrites existing .cbz if del_old_cbz is true
     shutil.move(out.with_name(f"{out.name}.zip"), out)
 
+
 def process_convert(cbz: Path, args: Namespace) -> bool:
     """Used by main() to run convert and catch exceptions."""
     try:
@@ -305,6 +306,7 @@ def process_convert(cbz: Path, args: Namespace) -> bool:
     except FileExistsError as e:
         print(e, file=stderr)
         return False
+
 
 def main():
     import argparse
@@ -325,10 +327,11 @@ def main():
 
     # Don't make a volume if we only provided one chapter
     if args.volume and len(args.cbzs) > 1:
-        success = convert_volume(
-            list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
-
-        if not success:
+        try:
+            convert_volume(
+                list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
+        except (FileExistsError, ChildProcessError) as e:
+            print(e, file=stderr)
             exit(1)
     else:
         with Pool() as p:
