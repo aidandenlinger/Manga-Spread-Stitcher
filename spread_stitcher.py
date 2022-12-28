@@ -18,6 +18,10 @@ font_ttf = "arial.ttf"
 font_size = 40
 
 
+class WrongImageSize(Exception):
+    pass
+
+
 def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
     """Converts a list of cbzs into one single cbz with merged spreads, placed
     in the same folder as the first cbz in the list."""
@@ -78,9 +82,10 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
 
     ARCHIVEDIR = workdir / f"archive_{cbz.name}"
     ARCHIVEDIR.mkdir()
-    extract_out = extract(cbz, ARCHIVEDIR)
-    if isinstance(extract_out, str):
-        print(extract_out, file=stderr)
+    try:
+        extract_out = extract(cbz, ARCHIVEDIR)
+    except Exception as e:
+        print(e, file=stderr)
         return False
 
     imgs = extract_out
@@ -122,10 +127,10 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         # First, archive and verify cbz file in ARCHIVEDIR
         ARCHIVEDIR = WORKDIR / "archive"
         ARCHIVEDIR.mkdir()
-        extract_out = extract(cbz, ARCHIVEDIR)
-
-        if isinstance(extract_out, str):
-            print(extract_out, file=stderr)
+        try:
+            extract_out = extract(cbz, ARCHIVEDIR)
+        except Exception as e:
+            print(e, file=stderr)
             return False
 
         imgs = extract_out
@@ -148,22 +153,25 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         return True
 
 
-def extract(cbz: Path, out: Path) -> List[Path] | str:
+def extract(cbz: Path, out: Path) -> List[Path]:
     """
     Extract the given cbz to out and verify the pages of the cbz are the same size.
     Will insert blank pages if needed to guarantee the cbz returns an even
     number of pages so each page has a spread partner.
     If successful, returns list of paths to all images.
-    If there's an error, returns an error string.
+
+    :raises: FileNotFoundError if cbz doesn't exist or doesn't have a cbz suffix 
+    :raises: WrongImageSize if an image has a larger width or height than the last image
     """
-    if not out.is_dir():
-        return f"[{cbz.name}] ERROR: {out} is not a directory!"
+    assert out.is_dir()
 
     if not cbz.exists():
-        return f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping to next file"
+        raise FileNotFoundError(
+            f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping file")
 
     if cbz.suffix != ".cbz":
-        return f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping to next file"
+        raise FileNotFoundError(
+            f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping file")
 
     shutil.unpack_archive(cbz, out, "zip")
 
@@ -201,9 +209,8 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
             # almost never an issue and is only off by a few pixels. However,
             # if it's *larger*, then this cbz may already handle spreads!
             if curr_page.width > width or curr_page.height > height:
-                return (f"[{cbz.name}] ERROR: "
-                        f"{img} {curr_page.width}x{curr_page.height} "
-                        f"doesn't match {width}x{height}! Skipping...")
+                raise WrongImageSize(
+                    f"[{cbz.name}] {img} {curr_page.width}x{curr_page.height} doesn't match {width}x{height}!")
 
     if len(imgs) % 2 != 0:
         # We have an odd amount of images. Add a blank page to the front of
