@@ -84,7 +84,7 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     ARCHIVEDIR.mkdir()
     try:
         extract_out = extract(cbz, ARCHIVEDIR)
-    except Exception as e:
+    except (FileNotFoundError, WrongImageSize) as e:
         print(e, file=stderr)
         return False
 
@@ -129,7 +129,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         ARCHIVEDIR.mkdir()
         try:
             extract_out = extract(cbz, ARCHIVEDIR)
-        except Exception as e:
+        except (FileNotFoundError, WrongImageSize) as e:
             print(e, file=stderr)
             return
 
