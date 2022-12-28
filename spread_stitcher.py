@@ -1,6 +1,7 @@
 #!/bin/python3
 import shutil
 import tempfile
+from argparse import Namespace
 from pathlib import Path
 from typing import List, Tuple
 from functools import partial
@@ -103,20 +104,27 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     return True
 
 
-def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
-    """Converts a cbz in-place to have merged pages."""
+
+
+def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
+    """Converts a cbz in-place to have merged pages.
+
+    :raises: FileExistsError if del_old_cbz is false and for a cbz file a.cbz,
+    a_original.cbz is in the same folder; or the file name ends with _original"""
     # Check that we don't have a name conflict for original file or if this is an original chapter
     if not del_old_cbz:
         ORIGINALCBZPATH = cbz.with_stem(f"{cbz.stem}_original")
         if ORIGINALCBZPATH.exists():
-            print(
-                f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, skipping file. (Was this chapter already converted?)", file=stderr)
-            return False
+            raise FileExistsError(
+                f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, "
+                f"skipping file. Delete {ORIGINALCBZPATH.name} to proceed with "
+                "this file. (Was this chapter already converted?)")
 
         if cbz.stem.endswith("_original"):
-            print(
-                f"[{cbz.name}] ERROR: cbz name ends with _original. Please rename the file. (Was this chapter already converted?)", file=stderr)
-            return False
+            raise FileExistsError(
+                f"[{cbz.name}] ERROR: cbz name ends with _original, skipping "
+                "file. Please rename this file to not end in _original if you "
+                "wish to convert it. (Was this chapter already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         if not quiet:
@@ -150,7 +158,6 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
 
         if not quiet:
             print(f"[{cbz.name}] Done!")
-        return True
 
 
 def extract(cbz: Path, out: Path) -> List[Path]:
@@ -160,7 +167,7 @@ def extract(cbz: Path, out: Path) -> List[Path]:
     number of pages so each page has a spread partner.
     If successful, returns list of paths to all images.
 
-    :raises: FileNotFoundError if cbz doesn't exist or doesn't have a cbz suffix 
+    :raises: FileNotFoundError if cbz doesn't exist or doesn't have a cbz suffix
     :raises: WrongImageSize if an image has a larger width or height than the last image
     """
     assert out.is_dir()
@@ -289,6 +296,15 @@ def create_cbz(img_dir: Path, out: Path):
     # Overwrites existing .cbz if del_old_cbz is true
     shutil.move(out.with_name(f"{out.name}.zip"), out)
 
+def process_convert(cbz: Path, args: Namespace) -> bool:
+    """Used by main() to run convert and catch exceptions."""
+    try:
+        convert(cbz, del_old_cbz=args.del_old_cbz,
+                skip_warning_page=args.skip_warning_page, quiet=args.quiet)
+        return True
+    except FileExistsError as e:
+        print(e, file=stderr)
+        return False
 
 def main():
     import argparse
@@ -316,8 +332,8 @@ def main():
             exit(1)
     else:
         with Pool() as p:
-            results = p.map(partial(convert, del_old_cbz=args.del_old_cbz,
-                                    skip_warning_page=args.skip_warning_page, quiet=args.quiet), map(Path, args.cbzs))
+            results = p.map(partial(process_convert, args=args),
+                            map(Path, args.cbzs))
 
         if not all(results):
             exit(1)
