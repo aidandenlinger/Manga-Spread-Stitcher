@@ -1,6 +1,7 @@
 #!/bin/python3
 import shutil
 import tempfile
+import logging
 from argparse import Namespace
 from pathlib import Path
 from typing import List, Tuple
@@ -23,6 +24,9 @@ class WrongImageSize(Exception):
     pass
 
 
+logger = logging.getLogger("spread_stitch")
+
+
 def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
     """Converts a list of cbzs into one single cbz with merged spreads, placed
     in the same folder as the first cbz in the list.
@@ -39,8 +43,7 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
             "Delete the file and retry to proceed. (Was this volume already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        if not quiet:
-            print(f"[{final_path.name}] Starting volume...")
+        logger.info(f"[{final_path.name}] Starting volume...")
 
         WORKDIR = Path(tmpdir)
         VOLDIR = WORKDIR / "vol"
@@ -71,24 +74,22 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
             for cbz in cbzs:
                 cbz.unlink()
 
-        if not quiet:
-            print(
-                f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
+        logger.info(
+            f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
 
 
 def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir: Path, quiet: bool) -> bool:
     """Used by convert_volume. Given a tuple of volume num and cbz,
     extract, stitch, and move stitched images to voldir."""
     (volnum, cbz) = volnum_and_cbz
-    if not quiet:
-        print(f"\t[{cbz.name}] Starting...")
+    logger.info(f"\t[{cbz.name}] Starting...")
 
     ARCHIVEDIR = workdir / f"archive_{cbz.name}"
     ARCHIVEDIR.mkdir()
     try:
         extract_out = extract(cbz, ARCHIVEDIR)
     except (FileNotFoundError, WrongImageSize) as e:
-        print(e, file=stderr)
+        logger.error(e)
         return False
 
     imgs = extract_out
@@ -101,8 +102,7 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     for img in OUTDIR.iterdir():
         shutil.move(img, voldir / f"{volnum:03d}_{img.name}")
 
-    if not quiet:
-        print(f"\t[{cbz.name}] Done!")
+    logger.info(f"\t[{cbz.name}] Done!")
     return True
 
 
@@ -127,8 +127,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
                 "wish to convert it. (Was this chapter already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        if not quiet:
-            print(f"[{cbz.name}] Starting...")
+        logger.info(f"[{cbz.name}] Starting...")
 
         WORKDIR = Path(tmpdir)
 
@@ -138,7 +137,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
         try:
             extract_out = extract(cbz, ARCHIVEDIR)
         except (FileNotFoundError, WrongImageSize) as e:
-            print(e, file=stderr)
+            logger.error(e)
             return
 
         imgs = extract_out
@@ -156,8 +155,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
 
         create_cbz(OUTDIR, cbz)
 
-        if not quiet:
-            print(f"[{cbz.name}] Done!")
+        logger.info(f"[{cbz.name}] Done!")
 
 
 def extract(cbz: Path, out: Path) -> List[Path]:
@@ -304,7 +302,7 @@ def process_convert(cbz: Path, args: Namespace) -> bool:
                 skip_warning_page=args.skip_warning_page, quiet=args.quiet)
         return True
     except FileExistsError as e:
-        print(e, file=stderr)
+        logger.error(e)
         return False
 
 
@@ -325,13 +323,26 @@ def main():
 
     args = parser.parse_args()
 
+    # Logging setup
+    if args.quiet:
+        level = logging.WARNING
+    else:
+        level = logging.INFO
+    logger.setLevel(level)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+
+    logger.addHandler(handler)
+
     # Don't make a volume if we only provided one chapter
     if args.volume and len(args.cbzs) > 1:
         try:
             convert_volume(
                 list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
         except (FileExistsError, ChildProcessError) as e:
-            print(e, file=stderr)
+            logger.error(e)
             exit(1)
     else:
         with Pool() as p:
