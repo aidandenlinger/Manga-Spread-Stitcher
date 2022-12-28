@@ -131,7 +131,7 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
             extract_out = extract(cbz, ARCHIVEDIR)
         except Exception as e:
             print(e, file=stderr)
-            return False
+            return
 
         imgs = extract_out
 
