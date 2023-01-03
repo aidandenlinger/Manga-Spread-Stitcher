@@ -1,6 +1,8 @@
 #!/bin/python3
 import shutil
 import tempfile
+import logging
+from argparse import Namespace
 from pathlib import Path
 from typing import List, Tuple
 from functools import partial
@@ -18,20 +20,30 @@ font_ttf = "arial.ttf"
 font_size = 40
 
 
-def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
+class WrongImageSize(Exception):
+    pass
+
+
+logger = logging.getLogger("spread_stitch")
+
+
+def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
     """Converts a list of cbzs into one single cbz with merged spreads, placed
-    in the same folder as the first cbz in the list."""
+    in the same folder as the first cbz in the list.
+
+    :raises: FileExistsError if volume file name already exists
+    :raises: ChildProcessError if a child extract process throws an exception"""
     assert len(cbzs) > 1
 
     final_path = cbzs[0].parent / f"{cbzs[0].stem}-{cbzs[-1].name}"
 
     if final_path.exists():
-        print(f"{[final_path.name]} ERROR: file name already exists, stopping. Delete the file and retry to proceed. (Was this volume already converted?)")
-        return False
+        raise FileExistsError(
+            f"{[final_path.name]} ERROR: file name already exists, stopping. "
+            "Delete the file and retry to proceed. (Was this volume already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        if not quiet:
-            print(f"[{final_path.name}] Starting volume...")
+        logger.info(f"[{final_path.name}] Starting volume...")
 
         WORKDIR = Path(tmpdir)
         VOLDIR = WORKDIR / "vol"
@@ -45,9 +57,8 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
                             enumerate(reversed(cbzs), start=1))
 
         if not all(results):
-            print(
-                f"[{final_path.name}] Terminating volume since earlier chapters failed.", file=stderr)
-            return False
+            raise ChildProcessError(
+                f"[{final_path.name}] Terminating volume since earlier chapters failed.")
 
         # Insert warning page at beginning if needed
         if not skip_warning_page:
@@ -63,24 +74,22 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
             for cbz in cbzs:
                 cbz.unlink()
 
-        if not quiet:
-            print(
-                f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
-        return True
+        logger.info(
+            f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
 
 
 def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir: Path, quiet: bool) -> bool:
     """Used by convert_volume. Given a tuple of volume num and cbz,
     extract, stitch, and move stitched images to voldir."""
     (volnum, cbz) = volnum_and_cbz
-    if not quiet:
-        print(f"\t[{cbz.name}] Starting...")
+    logger.info(f"\t[{cbz.name}] Starting...")
 
     ARCHIVEDIR = workdir / f"archive_{cbz.name}"
     ARCHIVEDIR.mkdir()
-    extract_out = extract(cbz, ARCHIVEDIR)
-    if isinstance(extract_out, str):
-        print(extract_out, file=stderr)
+    try:
+        extract_out = extract(cbz, ARCHIVEDIR)
+    except (FileNotFoundError, WrongImageSize) as e:
+        logger.error(e)
         return False
 
     imgs = extract_out
@@ -93,40 +102,43 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     for img in OUTDIR.iterdir():
         shutil.move(img, voldir / f"{volnum:03d}_{img.name}")
 
-    if not quiet:
-        print(f"\t[{cbz.name}] Done!")
+    logger.info(f"\t[{cbz.name}] Done!")
     return True
 
 
-def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False) -> bool:
-    """Converts a cbz in-place to have merged pages."""
+def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
+    """Converts a cbz in-place to have merged pages.
+
+    :raises: FileExistsError if del_old_cbz is false and for a cbz file a.cbz,
+    a_original.cbz is in the same folder; or the file name ends with _original"""
     # Check that we don't have a name conflict for original file or if this is an original chapter
     if not del_old_cbz:
         ORIGINALCBZPATH = cbz.with_stem(f"{cbz.stem}_original")
         if ORIGINALCBZPATH.exists():
-            print(
-                f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, skipping file. (Was this chapter already converted?)", file=stderr)
-            return False
+            raise FileExistsError(
+                f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, "
+                f"skipping file. Delete {ORIGINALCBZPATH.name} to proceed with "
+                "this file. (Was this chapter already converted?)")
 
         if cbz.stem.endswith("_original"):
-            print(
-                f"[{cbz.name}] ERROR: cbz name ends with _original. Please rename the file. (Was this chapter already converted?)", file=stderr)
-            return False
+            raise FileExistsError(
+                f"[{cbz.name}] ERROR: cbz name ends with _original, skipping "
+                "file. Please rename this file to not end in _original if you "
+                "wish to convert it. (Was this chapter already converted?)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        if not quiet:
-            print(f"[{cbz.name}] Starting...")
+        logger.info(f"[{cbz.name}] Starting...")
 
         WORKDIR = Path(tmpdir)
 
         # First, archive and verify cbz file in ARCHIVEDIR
         ARCHIVEDIR = WORKDIR / "archive"
         ARCHIVEDIR.mkdir()
-        extract_out = extract(cbz, ARCHIVEDIR)
-
-        if isinstance(extract_out, str):
-            print(extract_out, file=stderr)
-            return False
+        try:
+            extract_out = extract(cbz, ARCHIVEDIR)
+        except (FileNotFoundError, WrongImageSize) as e:
+            logger.error(e)
+            return
 
         imgs = extract_out
 
@@ -143,27 +155,28 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
 
         create_cbz(OUTDIR, cbz)
 
-        if not quiet:
-            print(f"[{cbz.name}] Done!")
-        return True
+        logger.info(f"[{cbz.name}] Done!")
 
 
-def extract(cbz: Path, out: Path) -> List[Path] | str:
+def extract(cbz: Path, out: Path) -> List[Path]:
     """
     Extract the given cbz to out and verify the pages of the cbz are the same size.
     Will insert blank pages if needed to guarantee the cbz returns an even
     number of pages so each page has a spread partner.
     If successful, returns list of paths to all images.
-    If there's an error, returns an error string.
+
+    :raises: FileNotFoundError if cbz doesn't exist or doesn't have a cbz suffix
+    :raises: WrongImageSize if an image has a larger width or height than the last image
     """
-    if not out.is_dir():
-        return f"[{cbz.name}] ERROR: {out} is not a directory!"
+    assert out.is_dir()
 
     if not cbz.exists():
-        return f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping to next file"
+        raise FileNotFoundError(
+            f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping file")
 
     if cbz.suffix != ".cbz":
-        return f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping to next file"
+        raise FileNotFoundError(
+            f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping file")
 
     shutil.unpack_archive(cbz, out, "zip")
 
@@ -188,7 +201,8 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
         first_page_bad = False
         if first_page.width > width or first_page.height > height:
             colors = first_page.convert("RGBA").getcolors(1)
-            first_page_bad = colors is not None and colors[0][1] == ImageColor.getcolor("white", "RGBA")
+            first_page_bad = colors is not None and colors[0][1] == ImageColor.getcolor(
+                "white", "RGBA")
 
     if first_page_bad:
         create_blank_page()
@@ -200,9 +214,8 @@ def extract(cbz: Path, out: Path) -> List[Path] | str:
             # almost never an issue and is only off by a few pixels. However,
             # if it's *larger*, then this cbz may already handle spreads!
             if curr_page.width > width or curr_page.height > height:
-                return (f"[{cbz.name}] ERROR: "
-                        f"{img} {curr_page.width}x{curr_page.height} "
-                        f"doesn't match {width}x{height}! Skipping...")
+                raise WrongImageSize(
+                    f"[{cbz.name}] {img} {curr_page.width}x{curr_page.height} doesn't match {width}x{height}!")
 
     if len(imgs) % 2 != 0:
         # We have an odd amount of images. Add a blank page to the front of
@@ -282,6 +295,17 @@ def create_cbz(img_dir: Path, out: Path):
     shutil.move(out.with_name(f"{out.name}.zip"), out)
 
 
+def process_convert(cbz: Path, args: Namespace) -> bool:
+    """Used by main() to run convert and catch exceptions."""
+    try:
+        convert(cbz, del_old_cbz=args.del_old_cbz,
+                skip_warning_page=args.skip_warning_page, quiet=args.quiet)
+        return True
+    except FileExistsError as e:
+        logger.error(e)
+        return False
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(
@@ -299,17 +323,31 @@ def main():
 
     args = parser.parse_args()
 
+    # Logging setup
+    if args.quiet:
+        level = logging.WARNING
+    else:
+        level = logging.INFO
+    logger.setLevel(level)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+
+    logger.addHandler(handler)
+
     # Don't make a volume if we only provided one chapter
     if args.volume and len(args.cbzs) > 1:
-        success = convert_volume(
-            list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
-
-        if not success:
+        try:
+            convert_volume(
+                list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
+        except (FileExistsError, ChildProcessError) as e:
+            logger.error(e)
             exit(1)
     else:
         with Pool() as p:
-            results = p.map(partial(convert, del_old_cbz=args.del_old_cbz,
-                                    skip_warning_page=args.skip_warning_page, quiet=args.quiet), map(Path, args.cbzs))
+            results = p.map(partial(process_convert, args=args),
+                            map(Path, args.cbzs))
 
         if not all(results):
             exit(1)
