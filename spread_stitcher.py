@@ -332,7 +332,7 @@ def main():
 
     handler = logging.StreamHandler()
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+    handler.setFormatter(logging.Formatter('%(message)s'))
 
     logger.addHandler(handler)
 
