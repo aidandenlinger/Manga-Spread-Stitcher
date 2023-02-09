@@ -195,11 +195,17 @@ def extract(cbz: Path, out: Path) -> List[Path]:
         with Image.new(mode, (width, height), "white") as blank:
             blank.save(blank_page_path)
 
+    def incorrect_dimensions(page: Image.Image) -> bool:
+        # First condition: page has larger dimensions, is most likely a spread
+        # Second condition: our initial width and height was a spread! check if
+        # a doubled page is approximitely equal to width
+        return (page.width > width or page.height > height) or (page.width * 2 >= (width - 100) and page.width * 2 <= (width + 100))
+
     with Image.open(imgs[-1]) as first_page:
         # Special case: check if first page is wrong dimensions *and* all white
         # If so, we'll replace it with a white page of correct dimensions
         first_page_bad = False
-        if first_page.width > width or first_page.height > height:
+        if incorrect_dimensions(first_page):
             colors = first_page.convert("RGBA").getcolors(1)
             first_page_bad = colors is not None and colors[0][1] == ImageColor.getcolor(
                 "white", "RGBA")
@@ -210,10 +216,7 @@ def extract(cbz: Path, out: Path) -> List[Path]:
 
     for img in imgs:
         with Image.open(img) as curr_page:
-            # I've found that if a page is smaller than the dimensions, it's
-            # almost never an issue and is only off by a few pixels. However,
-            # if it's *larger*, then this cbz may already handle spreads!
-            if curr_page.width > width or curr_page.height > height:
+            if incorrect_dimensions(curr_page):
                 raise WrongImageSize(
                     f"[{cbz.name}] {img} {curr_page.width}x{curr_page.height} doesn't match {width}x{height}!")
 
