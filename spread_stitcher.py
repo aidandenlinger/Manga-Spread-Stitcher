@@ -3,8 +3,8 @@ import logging
 import shutil
 import tempfile
 from argparse import Namespace
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
-from multiprocessing import Pool
 from pathlib import Path
 from typing import List, Tuple
 
@@ -55,7 +55,7 @@ def convert_volume(
         VOLDIR = WORKDIR / "vol"
         VOLDIR.mkdir()
 
-        with Pool() as p:
+        with ProcessPoolExecutor() as p:
             # reverse the manga order because we want the first chapter to be
             # at the *end* of the cbz, because we read right to left
             # Start from 1 to leave room for warning page
@@ -423,7 +423,7 @@ def main():
             logger.error(e)
             exit(1)
     else:
-        with Pool() as p:
+        with ProcessPoolExecutor() as p:
             results = p.map(partial(process_convert, args=args), map(Path, args.cbzs))
 
         if not all(results):
