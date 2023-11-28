@@ -1,14 +1,14 @@
 #!/bin/python3
+import logging
 import shutil
 import tempfile
-import logging
 from argparse import Namespace
+from functools import partial
+from multiprocessing import Pool
 from pathlib import Path
 from typing import List, Tuple
-from functools import partial
+
 from PIL import Image, ImageColor
-from sys import stderr
-from multiprocessing import Pool
 
 # FIRST PAGE MESSAGE CONFIG
 # This script currently assumes R to L mangas and generates it such that the
@@ -27,7 +27,12 @@ class WrongImageSize(Exception):
 logger = logging.getLogger("spread_stitch")
 
 
-def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
+def convert_volume(
+    cbzs: List[Path],
+    del_old_cbz: bool = False,
+    skip_warning_page: bool = False,
+    quiet: bool = False,
+):
     """Converts a list of cbzs into one single cbz with merged spreads, placed
     in the same folder as the first cbz in the list.
 
@@ -40,7 +45,8 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
     if final_path.exists():
         raise FileExistsError(
             f"{[final_path.name]} ERROR: file name already exists, stopping. "
-            "Delete the file and retry to proceed. (Was this volume already converted?)")
+            "Delete the file and retry to proceed. (Was this volume already converted?)"
+        )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         logger.info(f"[{final_path.name}] Starting volume...")
@@ -53,12 +59,17 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
             # reverse the manga order because we want the first chapter to be
             # at the *end* of the cbz, because we read right to left
             # Start from 1 to leave room for warning page
-            results = p.map(partial(extract_stitch_move, workdir=WORKDIR, voldir=VOLDIR, quiet=quiet),
-                            enumerate(reversed(cbzs), start=1))
+            results = p.map(
+                partial(
+                    extract_stitch_move, workdir=WORKDIR, voldir=VOLDIR, quiet=quiet
+                ),
+                enumerate(reversed(cbzs), start=1),
+            )
 
         if not all(results):
             raise ChildProcessError(
-                f"[{final_path.name}] Terminating volume since earlier chapters failed.")
+                f"[{final_path.name}] Terminating volume since earlier chapters failed."
+            )
 
         # Insert warning page at beginning if needed
         if not skip_warning_page:
@@ -67,7 +78,11 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
             with Image.open(img_path) as img:
                 # don't multiply width by 2: the dimensions are from stitched images
                 write_warning_page(
-                    VOLDIR / f"000_000{img_path.suffix}", img.mode, img.width, img.height)
+                    VOLDIR / f"000_000{img_path.suffix}",
+                    img.mode,
+                    img.width,
+                    img.height,
+                )
         create_cbz(VOLDIR, final_path)
 
         if del_old_cbz:
@@ -75,10 +90,13 @@ def convert_volume(cbzs: List[Path], del_old_cbz: bool = False, skip_warning_pag
                 cbz.unlink()
 
         logger.info(
-            f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}")
+            f"[{final_path.name}] Done with volume! You can find it at {str(final_path)}"
+        )
 
 
-def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir: Path, quiet: bool) -> bool:
+def extract_stitch_move(
+    volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir: Path, quiet: bool
+) -> bool:
     """Used by convert_volume. Given a tuple of volume num and cbz,
     extract, stitch, and move stitched images to voldir."""
     (volnum, cbz) = volnum_and_cbz
@@ -106,7 +124,12 @@ def extract_stitch_move(volnum_and_cbz: Tuple[int, Path], workdir: Path, voldir:
     return True
 
 
-def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = False, quiet: bool = False):
+def convert(
+    cbz: Path,
+    del_old_cbz: bool = False,
+    skip_warning_page: bool = False,
+    quiet: bool = False,
+):
     """Converts a cbz in-place to have merged pages.
 
     :raises: FileExistsError if del_old_cbz is false and for a cbz file a.cbz,
@@ -118,13 +141,15 @@ def convert(cbz: Path, del_old_cbz: bool = False, skip_warning_page: bool = Fals
             raise FileExistsError(
                 f"[{cbz.name}] ERROR: {ORIGINALCBZPATH.name} already exists, "
                 f"skipping file. Delete {ORIGINALCBZPATH.name} to proceed with "
-                "this file. (Was this chapter already converted?)")
+                "this file. (Was this chapter already converted?)"
+            )
 
         if cbz.stem.endswith("_original"):
             raise FileExistsError(
                 f"[{cbz.name}] ERROR: cbz name ends with _original, skipping "
                 "file. Please rename this file to not end in _original if you "
-                "wish to convert it. (Was this chapter already converted?)")
+                "wish to convert it. (Was this chapter already converted?)"
+            )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         logger.info(f"[{cbz.name}] Starting...")
@@ -172,11 +197,13 @@ def extract(cbz: Path, out: Path) -> List[Path]:
 
     if not cbz.exists():
         raise FileNotFoundError(
-            f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping file")
+            f"[{cbz.name}] ERROR: {cbz} is not a valid path! Skipping file"
+        )
 
     if cbz.suffix != ".cbz":
         raise FileNotFoundError(
-            f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping file")
+            f"[{cbz.name}] ERROR: {cbz} is not a cbz! Skipping file"
+        )
 
     shutil.unpack_archive(cbz, out, "zip")
 
@@ -199,7 +226,9 @@ def extract(cbz: Path, out: Path) -> List[Path]:
         # First condition: page has larger dimensions, is most likely a spread
         # Second condition: our initial width and height was a spread! check if
         # a doubled page is approximitely equal to width
-        return (page.width > width or page.height > height) or (page.width * 2 >= (width - 100) and page.width * 2 <= (width + 100))
+        return (page.width > width or page.height > height) or (
+            page.width * 2 >= (width - 100) and page.width * 2 <= (width + 100)
+        )
 
     with Image.open(imgs[-1]) as first_page:
         # Special case: check if first page is wrong dimensions *and* all white
@@ -208,7 +237,8 @@ def extract(cbz: Path, out: Path) -> List[Path]:
         if incorrect_dimensions(first_page):
             colors = first_page.convert("RGBA").getcolors(1)
             first_page_bad = colors is not None and colors[0][1] == ImageColor.getcolor(
-                "white", "RGBA")
+                "white", "RGBA"
+            )
 
     if first_page_bad:
         create_blank_page()
@@ -218,7 +248,8 @@ def extract(cbz: Path, out: Path) -> List[Path]:
         with Image.open(img) as curr_page:
             if incorrect_dimensions(curr_page):
                 raise WrongImageSize(
-                    f"[{cbz.name}] {img} {curr_page.width}x{curr_page.height} doesn't match {width}x{height}!")
+                    f"[{cbz.name}] {img} {curr_page.width}x{curr_page.height} doesn't match {width}x{height}!"
+                )
 
     if len(imgs) % 2 != 0:
         # We have an odd amount of images. Add a blank page to the front of
@@ -254,16 +285,19 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
     # If we only have 2 pages, don't insert - we only have one page to show!
     if not skip_warning_page and len(imgs) > 2:
         write_warning_page(
-            out / f"{pagenum:03d}{imgs[0].suffix}", mode, width * 2, height)
+            out / f"{pagenum:03d}{imgs[0].suffix}", mode, width * 2, height
+        )
         pagenum += 1
 
     # The list is already in reverse. Pop off 2 images, stick first one
     # on left, second on right, give it the right name, done
     # Made with help from https://stackoverflow.com/questions/10657383/stitching-photos-together
     while len(imgs) >= 2:
-        with (Image.open(imgs.pop(0)) as img1,
-              Image.open(imgs.pop(0)) as img2,
-              Image.new(img1.mode, (width*2, height), "white") as outimg):
+        with (
+            Image.open(imgs.pop(0)) as img1,
+            Image.open(imgs.pop(0)) as img2,
+            Image.new(img1.mode, (width * 2, height), "white") as outimg,
+        ):
             # Fill page with white, to account for smaller dimension pages
             # Assumes the background color *should* be white
             outimg.paste(im=img1, box=(0, 0))
@@ -277,13 +311,19 @@ def stitch(imgs: List[Path], out: Path, skip_warning_page: bool):
 def write_warning_page(out: Path, mode: str, width: int, height: int):
     """Writes a warning page to out."""
     from PIL import ImageDraw, ImageFont
+
     with Image.new(mode, (width, height), "white") as img:
         draw = ImageDraw.Draw(img)
         large_font = ImageFont.truetype(font_ttf, size=font_size)
         (_, _, text_width, text_height) = draw.textbbox(
-            (0, 0), go_to_back_text, font=large_font)
-        draw.text(((width - text_width)/2, (height - text_height)/2),
-                  go_to_back_text, font=large_font, fill="black")
+            (0, 0), go_to_back_text, font=large_font
+        )
+        draw.text(
+            ((width - text_width) / 2, (height - text_height) / 2),
+            go_to_back_text,
+            font=large_font,
+            fill="black",
+        )
         img.save(out)
 
 
@@ -301,8 +341,12 @@ def create_cbz(img_dir: Path, out: Path):
 def process_convert(cbz: Path, args: Namespace) -> bool:
     """Used by main() to run convert and catch exceptions."""
     try:
-        convert(cbz, del_old_cbz=args.del_old_cbz,
-                skip_warning_page=args.skip_warning_page, quiet=args.quiet)
+        convert(
+            cbz,
+            del_old_cbz=args.del_old_cbz,
+            skip_warning_page=args.skip_warning_page,
+            quiet=args.quiet,
+        )
         return True
     except FileExistsError as e:
         logger.error(e)
@@ -311,18 +355,45 @@ def process_convert(cbz: Path, args: Namespace) -> bool:
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(
-        description='Correctly show manga spreads by stitching / merging / combining the pages of a cbz.')
-    parser.add_argument('cbzs', metavar='CBZ', type=str,
-                        nargs='+', help='cbzs to stitch')
-    parser.add_argument('-d', '--del-old-cbzs', dest='del_old_cbz', action='store_true',
-                        default=False, help="Delete the original, unstitched cbzs instead of saving them")
-    parser.add_argument('-w', '--skip-warning-page', dest='skip_warning_page', action='store_true', default=False,
-                        help="Do not put a warning page at the beginning of the cbz telling you the manga starts on the last page")
-    parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
-                        help="Do not print status updates. Errors will still be printed.")
-    parser.add_argument('-v', '--volume', dest='volume', action='store_true', default=False,
-                        help="Put all cbzs into one cbz as a volume. Ordered in the same way as the arguments. Will be placed in the same folder as the first cbz.")
+        description="Correctly show manga spreads by stitching / merging / combining the pages of a cbz."
+    )
+    parser.add_argument(
+        "cbzs", metavar="CBZ", type=str, nargs="+", help="cbzs to stitch"
+    )
+    parser.add_argument(
+        "-d",
+        "--del-old-cbzs",
+        dest="del_old_cbz",
+        action="store_true",
+        default=False,
+        help="Delete the original, unstitched cbzs instead of saving them",
+    )
+    parser.add_argument(
+        "-w",
+        "--skip-warning-page",
+        dest="skip_warning_page",
+        action="store_true",
+        default=False,
+        help="Do not put a warning page at the beginning of the cbz telling you the manga starts on the last page",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="quiet",
+        action="store_true",
+        default=False,
+        help="Do not print status updates. Errors will still be printed.",
+    )
+    parser.add_argument(
+        "-v",
+        "--volume",
+        dest="volume",
+        action="store_true",
+        default=False,
+        help="Put all cbzs into one cbz as a volume. Ordered in the same way as the arguments. Will be placed in the same folder as the first cbz.",
+    )
 
     args = parser.parse_args()
 
@@ -335,7 +406,7 @@ def main():
 
     handler = logging.StreamHandler()
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.setFormatter(logging.Formatter("%(message)s"))
 
     logger.addHandler(handler)
 
@@ -343,18 +414,21 @@ def main():
     if args.volume and len(args.cbzs) > 1:
         try:
             convert_volume(
-                list(map(Path, args.cbzs)), args.del_old_cbz, args.skip_warning_page, args.quiet)
+                list(map(Path, args.cbzs)),
+                args.del_old_cbz,
+                args.skip_warning_page,
+                args.quiet,
+            )
         except (FileExistsError, ChildProcessError) as e:
             logger.error(e)
             exit(1)
     else:
         with Pool() as p:
-            results = p.map(partial(process_convert, args=args),
-                            map(Path, args.cbzs))
+            results = p.map(partial(process_convert, args=args), map(Path, args.cbzs))
 
         if not all(results):
             exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
